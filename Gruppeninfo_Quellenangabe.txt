@@ -1,0 +1,6 @@
+Quellen: http://stackoverflow.com/questions/3624280/how-to-use-sharedpreferences-in-android-to-store-fetch-and-edit-values
+		google developer page
+		
+		Unsere kleine Gruppe besteht aus:
+		Lynn Hoff Matrikelnummer:110970
+		Marie Bornemann Matrikelnummer:110541

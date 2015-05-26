@@ -1,7 +1,12 @@
 package mmbuw.com.sensorReader;
 
 import android.app.Activity;
+import android.app.Notification;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.TaskStackBuilder;
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -11,6 +16,7 @@ import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Display;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -18,8 +24,9 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.RelativeLayout;
 import android.widget.SeekBar;
-
+import android.support.v4.app.NotificationCompat;
 import java.util.LinkedList;
 import java.util.PriorityQueue;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -28,107 +35,68 @@ import java.util.concurrent.ArrayBlockingQueue;
 public class SensorReader extends Activity implements SeekBar.OnSeekBarChangeListener, SensorEventListener {
     private SensorManager mySensorManager;
     private Sensor mySensor;
+    private int progressChanged;
+    private int progressWindow;
+    private NotificationCompat.Builder builder;
+    private NotificationManager notManager;
+
 
     private DrawSomething drawView; //CustomViewInstance
+    private FFTView fftView;
 
     private SeekBar seekMe;
+    private SeekBar seekMeToo;
     private float[] gravity = {0,0,0};
 
     private float x;
     private float y;
     private float z;
-    private LinkedList<Float> accValuesX = new LinkedList<>();
-    private LinkedList<Float> accValuesY = new LinkedList<>();
-    private LinkedList<Float> accValuesZ = new LinkedList<>();
-
-    public class DrawSomething extends View{
-
-        private Paint paint = new Paint();
-        public DrawSomething(Context context){
-            super(context);
-        }
-
-        public void setData(float x, float y, float z){
-
-            if(accValuesX.size()==1024){
-                accValuesX.removeFirst();
-                accValuesX.addLast(x);}
-            else
-                accValuesX.addLast(x);
-
-            if(accValuesY.size()==1024){
-                accValuesY.removeFirst();
-                accValuesY.addLast(y);}
-            else
-                accValuesY.addLast(y);
-
-            if(accValuesZ.size()==1024){
-                accValuesZ.removeFirst();
-                accValuesZ.addLast(z);}
-            else
-                accValuesZ.addLast(z);
-
-            invalidate();
-        }
-
-        @Override
-        protected void onDraw(Canvas canvas){
-            Paint paint = new Paint();
-            //background coloring
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(Color.BLACK);
-            canvas.drawPaint(paint);
-
-            paint.setColor(Color.BLUE);
-            canvas.drawLine(0,0,50,50,paint);
-
-            for (int i=0;i<accValuesX.size()-1;i++){
-                paint.setColor(Color.RED);
-                int point1X=i*getWidth()/1024;
-                int point2X=(i+1)*getWidth()/1024;
-                canvas.drawLine(point1X,accValuesX.get(i),point2X,accValuesX.get(i+1),paint);
-            }
-            for (int i=0;i<accValuesY.size()-1;i++){
-                paint.setColor(Color.GREEN);
-                int point1X=i*getWidth()/1024;
-                int point2X=(i+1)*getWidth()/1024;
-                canvas.drawLine(point1X,accValuesY.get(i),point2X,accValuesY.get(i+1),paint);
-            }
-            for (int i=0;i<accValuesZ.size()-1;i++){
-                paint.setColor(Color.BLUE);
-                int point1X=i*getWidth()/1024;
-                int point2X=(i+1)*getWidth()/1024;
-                canvas.drawLine(point1X,accValuesZ.get(i),point2X,accValuesZ.get(i+1),paint);
-            }
-        }
-    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-
         setContentView(R.layout.activity_sensor);
+
         seekMe = (SeekBar) findViewById(R.id.scaleBar);
         seekMe.setOnSeekBarChangeListener(this);
 
         mySensorManager = (SensorManager)getSystemService(Context.SENSOR_SERVICE);
         mySensor= mySensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        mySensorManager.registerListener(this,mySensor,1000);
 
-        drawView = new DrawSomething(this);
-        //drawView.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
-                //LinearLayout.LayoutParams.WRAP_CONTENT));
+        drawView = (DrawSomething)findViewById(R.id.firstView);
 
-        addContentView(drawView,drawView.getLayoutParams());
+        seekMeToo = (SeekBar)findViewById(R.id.scaleWindowBar);
+        seekMeToo.setOnSeekBarChangeListener(this);
+        fftView = (FFTView)findViewById(R.id.fftView);
 
-        //drawView.getLayoutParams().height=drawView.getHeight()/2;
-        //drawView.getLayoutParams().width=drawView.getWidth();
-        //drawView.setBackgroundColor(Color.BLACK);
+        Intent myInt = new Intent(this,SensorReader.class);
+        TaskStackBuilder stackBuilder = TaskStackBuilder.create(this);
+        stackBuilder.addNextIntent(myInt);
+        PendingIntent myPendingInt = stackBuilder.getPendingIntent(0,PendingIntent.FLAG_UPDATE_CURRENT);
+        builder= new NotificationCompat.Builder(this).setSmallIcon(R.drawable.ic_launcher)
+                .setContentText("Activity")
+                .setContentText("I'm sleeping....zzzZZZZ");
+        builder.setContentIntent(myPendingInt);
+        notManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        notManager.notify(1,builder.build());
 
     }
 
     @Override
     public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+        if(seekBar.getId()==seekMe.getId()){
+            progressChanged=progress;
+            mySensorManager.unregisterListener(this,mySensor);
+            mySensorManager.registerListener(this,mySensor,progressChanged*1000);
+        }
+        else if(seekBar.getId()==seekMeToo.getId()){
+           progressWindow=progress;
+            RelativeLayout.LayoutParams windowSize=(RelativeLayout.LayoutParams) fftView.getLayoutParams();
+            windowSize.height=progressWindow*20;
+            fftView.setLayoutParams(windowSize);
+        }
+
     }
 
     @Override
@@ -137,12 +105,13 @@ public class SensorReader extends Activity implements SeekBar.OnSeekBarChangeLis
 
     @Override
     public void onStopTrackingTouch(SeekBar seekBar) {}
+
+    @Override
     public void onSensorChanged(SensorEvent event)
     {
         // alpha is calculated as t / (t + dT)
         // with t, the low-pass filter's time-constant
         // and dT, the event delivery rate
-
         final float alpha = 0.8f;
 
         gravity[0] = alpha * gravity[0] + (1 - alpha) * event.values[0];
@@ -152,11 +121,20 @@ public class SensorReader extends Activity implements SeekBar.OnSeekBarChangeLis
         x=event.values[0] - gravity[0];
         y=event.values[1] - gravity[1];
         z=event.values[2] - gravity[2];
-
         drawView.setData(x,y,z);
+        fftView.getMagnitude(x,y,z);
+
+
+        if(fftView.getAverage()!=""){
+            builder= new NotificationCompat.Builder(this).setSmallIcon(R.drawable.ic_launcher)
+                    .setContentText("Activity")
+                    .setContentText(fftView.getAverage());
+            notManager.notify(1,builder.build());
+            fftView.setAverage(0);
+        }
+
     }
 
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {}
-
 }
